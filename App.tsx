@@ -152,6 +152,18 @@ const App: React.FC = () => {
     setStats(getStatsFromRecord(sessionRecords[next]));
   };
 
+  const openParagraph = (idx: number) => {
+    setParagraphIndex(idx);
+    setUserInput('');
+    setGameState(GameState.IDLE);
+    setIsError(false);
+    setErrorIndices(new Set());
+    setParagraphMistakes({});
+    setParagraphAttempts(0);
+    setParagraphCorrect(0);
+    setIsFocused(true);
+  };
+
   const calculateStats = useCallback(() => {
     if (!statsRef.current.startTime) return;
 
@@ -312,11 +324,12 @@ const App: React.FC = () => {
               const acc = currentRecord.paragraphAccuracies[idx];
               const active = idx === (paragraphIndex % paragraphs.length);
               return (
-                <div
+                <button
                   key={idx}
-                  className={`px-3 py-2 rounded-lg text-sm border ${active
+                  onClick={() => openParagraph(idx)}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm border transition-colors ${active
                     ? 'bg-primary-600/20 border-primary-500 text-white'
-                    : 'bg-slate-800 border-slate-700 text-slate-300'
+                    : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
                     }`}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -325,7 +338,7 @@ const App: React.FC = () => {
                       {acc !== undefined ? `${Math.round(acc)}%` : '--'}
                     </span>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>

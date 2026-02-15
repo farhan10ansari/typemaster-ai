@@ -32,9 +32,12 @@ const TypingArea: React.FC<TypingAreaProps> = ({ text, userInput, isFocused, onF
   const renderChar = (char: string, index: number) => {
     const isCurrent = index === userInput.length;
     const isTyped = index < userInput.length;
-    
+
     // Check if this specific index had an error at any point
     const hasHistoryError = errorIndices.has(index);
+
+    const isEnterHint = char === '\n';
+    const displayChar = isEnterHint ? '⏎' : char;
 
     let className = "font-mono text-2xl md:text-3xl transition-colors duration-75 relative ";
     
@@ -58,15 +61,15 @@ const TypingArea: React.FC<TypingAreaProps> = ({ text, userInput, isFocused, onF
     }
 
     return (
-      <span 
-        key={index} 
+      <span
+        key={index}
         ref={isCurrent ? cursorRef : null}
         className={className}
       >
         {isCurrent && isFocused && !isError && (
           <span className="absolute left-0 -bottom-1 w-full h-1 bg-primary-500 cursor-blink"></span>
         )}
-        {char}
+        {isEnterHint ? <span className="text-primary-400 font-bold">{displayChar}</span> : displayChar}
       </span>
     );
   };
