@@ -8,33 +8,80 @@ import { RefreshCw, Keyboard } from 'lucide-react';
 
 type MistakeMap = Record<string, number>;
 
+type DifficultyRecord = {
+  completedParagraphs: number;
+  totalTyped: number;
+  totalCorrect: number;
+  errors: number;
+  paragraphAccuracies: Record<number, number>;
+  updatedAt: number;
+};
+
+type SessionRecords = Record<Difficulty, DifficultyRecord>;
+
+const STORAGE_KEY = 'typemaster_session_records_v1';
+
 const difficultyLabels: Record<Difficulty, string> = {
   easy: 'Easy',
   medium: 'Medium',
   hard: 'Hard',
 };
 
+const createEmptyRecord = (): DifficultyRecord => ({
+  completedParagraphs: 0,
+  totalTyped: 0,
+  totalCorrect: 0,
+  errors: 0,
+  paragraphAccuracies: {},
+  updatedAt: Date.now(),
+});
+
+const createDefaultRecords = (): SessionRecords => ({
+  easy: createEmptyRecord(),
+  medium: createEmptyRecord(),
+  hard: createEmptyRecord(),
+});
+
+const loadRecords = (): SessionRecords => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return createDefaultRecords();
+    const parsed = JSON.parse(raw) as Partial<SessionRecords>;
+    return {
+      easy: { ...createEmptyRecord(), ...(parsed.easy ?? {}) },
+      medium: { ...createEmptyRecord(), ...(parsed.medium ?? {}) },
+      hard: { ...createEmptyRecord(), ...(parsed.hard ?? {}) },
+    };
+  } catch {
+    return createDefaultRecords();
+  }
+};
+
 const prettifyMistake = (char: string): string => {
   if (char === ' ') return '␠';
-  if (char === '"') return '"';
+  if (char === '\n') return '⏎';
   return char;
 };
 
+const getStatsFromRecord = (record: DifficultyRecord): StatsType => ({
+  wpm: 0,
+  accuracy: record.totalTyped > 0 ? (record.totalCorrect / record.totalTyped) * 100 : 100,
+  errors: record.errors,
+  totalChars: record.totalTyped,
+  correctChars: record.totalCorrect,
+  startTime: null,
+  endTime: null,
+});
+
 const App: React.FC = () => {
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
+  const [sessionRecords, setSessionRecords] = useState<SessionRecords>(() => loadRecords());
+
   const [paragraphIndex, setParagraphIndex] = useState(0);
   const [completedParagraphs, setCompletedParagraphs] = useState(0);
   const [userInput, setUserInput] = useState('');
   const [gameState, setGameState] = useState<GameState>(GameState.IDLE);
-  const [stats, setStats] = useState<StatsType>({
-    wpm: 0,
-    accuracy: 100,
-    errors: 0,
-    totalChars: 0,
-    correctChars: 0,
-    startTime: null,
-    endTime: null
-  });
+  const [stats, setStats] = useState<StatsType>(() => getStatsFromRecord(loadRecords().medium));
 
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [isShiftPressed, setIsShiftPressed] = useState(false);
@@ -43,14 +90,41 @@ const App: React.FC = () => {
   const [errorIndices, setErrorIndices] = useState<Set<number>>(new Set());
   const [paragraphMistakes, setParagraphMistakes] = useState<MistakeMap>({});
   const [lastParagraphMistakes, setLastParagraphMistakes] = useState<MistakeMap>({});
+  const [paragraphAttempts, setParagraphAttempts] = useState(0);
+  const [paragraphCorrect, setParagraphCorrect] = useState(0);
 
   const paragraphs = PRACTICE_PARAGRAPHS[difficulty];
-  const text = paragraphs[paragraphIndex % paragraphs.length];
+  const text = `${paragraphs[paragraphIndex % paragraphs.length]}\n`; // Enter key required at paragraph end
 
   const statsRef = useRef(stats);
   statsRef.current = stats;
 
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionRecords));
+  }, [sessionRecords]);
+
+  useEffect(() => {
+    const record = sessionRecords[difficulty];
+    setCompletedParagraphs(record.completedParagraphs);
+  }, [difficulty, sessionRecords]);
+
   const resetTypingProgressOnly = () => {
+    setParagraphIndex(0);
+    setCompletedParagraphs(sessionRecords[difficulty].completedParagraphs);
+    setUserInput('');
+    setIsError(false);
+    setErrorIndices(new Set());
+    setParagraphMistakes({});
+    setLastParagraphMistakes({});
+    setParagraphAttempts(0);
+    setParagraphCorrect(0);
+  };
+
+  const resetCurrentDifficultySession = () => {
+    const empty = createEmptyRecord();
+    setSessionRecords(prev => ({ ...prev, [difficulty]: empty }));
+    setStats(getStatsFromRecord(empty));
+    setGameState(GameState.IDLE);
     setParagraphIndex(0);
     setCompletedParagraphs(0);
     setUserInput('');
@@ -58,27 +132,24 @@ const App: React.FC = () => {
     setErrorIndices(new Set());
     setParagraphMistakes({});
     setLastParagraphMistakes({});
-  };
-
-  const resetGame = () => {
-    resetTypingProgressOnly();
-    setGameState(GameState.IDLE);
-    setStats({
-      wpm: 0,
-      accuracy: 100,
-      errors: 0,
-      totalChars: 0,
-      correctChars: 0,
-      startTime: null,
-      endTime: null
-    });
+    setParagraphAttempts(0);
+    setParagraphCorrect(0);
     setIsFocused(true);
   };
 
   const changeDifficulty = (next: Difficulty) => {
     setDifficulty(next);
-    resetTypingProgressOnly();
+    setParagraphIndex(0);
+    setUserInput('');
     setGameState(GameState.IDLE);
+    setIsError(false);
+    setErrorIndices(new Set());
+    setParagraphMistakes({});
+    setLastParagraphMistakes({});
+    setParagraphAttempts(0);
+    setParagraphCorrect(0);
+    setCompletedParagraphs(sessionRecords[next].completedParagraphs);
+    setStats(getStatsFromRecord(sessionRecords[next]));
   };
 
   const calculateStats = useCallback(() => {
@@ -103,15 +174,33 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [gameState, calculateStats]);
 
-  const moveToNextParagraph = useCallback(() => {
+  const moveToNextParagraph = useCallback((finalParagraphAccuracy: number, completedIndex: number) => {
     setLastParagraphMistakes(paragraphMistakes);
     setParagraphMistakes({});
     setUserInput('');
     setErrorIndices(new Set());
     setIsError(false);
+    setParagraphAttempts(0);
+    setParagraphCorrect(0);
     setParagraphIndex(prev => (prev + 1) % paragraphs.length);
     setCompletedParagraphs(prev => prev + 1);
-  }, [paragraphMistakes, paragraphs.length]);
+
+    setSessionRecords(prev => {
+      const current = prev[difficulty];
+      return {
+        ...prev,
+        [difficulty]: {
+          ...current,
+          completedParagraphs: current.completedParagraphs + 1,
+          paragraphAccuracies: {
+            ...current.paragraphAccuracies,
+            [completedIndex]: finalParagraphAccuracy,
+          },
+          updatedAt: Date.now(),
+        },
+      };
+    });
+  }, [paragraphMistakes, paragraphs.length, difficulty]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (!isFocused || gameState === GameState.LOADING) return;
@@ -137,28 +226,51 @@ const App: React.FC = () => {
     const nextCharIndex = userInput.length;
     if (nextCharIndex >= text.length) return;
 
-    const charTyped = e.key;
-    if (charTyped === 'Enter') return;
-    if (charTyped.length !== 1) return;
+    const charTyped = e.key === 'Enter' ? '\n' : e.key;
+    if (charTyped !== '\n' && charTyped.length !== 1) return;
 
     const correctChar = text[nextCharIndex];
     const isCorrect = charTyped === correctChar;
 
+    const nextAttempts = paragraphAttempts + 1;
+    const nextCorrect = paragraphCorrect + (isCorrect ? 1 : 0);
+    setParagraphAttempts(nextAttempts);
+    setParagraphCorrect(nextCorrect);
+
     setStats(prev => {
       const totalChars = prev.totalChars + 1;
       const correctChars = isCorrect ? prev.correctChars + 1 : prev.correctChars;
+      const errors = prev.errors + (isCorrect ? 0 : 1);
       return {
         ...prev,
         totalChars,
         correctChars,
-        errors: prev.errors + (isCorrect ? 0 : 1),
+        errors,
+      };
+    });
+
+    setSessionRecords(prev => {
+      const current = prev[difficulty];
+      return {
+        ...prev,
+        [difficulty]: {
+          ...current,
+          totalTyped: current.totalTyped + 1,
+          totalCorrect: current.totalCorrect + (isCorrect ? 1 : 0),
+          errors: current.errors + (isCorrect ? 0 : 1),
+          updatedAt: Date.now(),
+        },
       };
     });
 
     if (isCorrect) {
       setIsError(false);
-      setUserInput(prev => prev + charTyped);
-      if (nextCharIndex + 1 === text.length) moveToNextParagraph();
+      setUserInput(prev => prev + (charTyped === '\n' ? '' : charTyped));
+
+      if (nextCharIndex + 1 === text.length) {
+        const paragraphAccuracy = nextAttempts > 0 ? (nextCorrect / nextAttempts) * 100 : 100;
+        moveToNextParagraph(paragraphAccuracy, paragraphIndex % paragraphs.length);
+      }
     } else {
       setIsError(true);
       setParagraphMistakes(prev => ({ ...prev, [correctChar]: (prev[correctChar] ?? 0) + 1 }));
@@ -168,7 +280,7 @@ const App: React.FC = () => {
         return updated;
       });
     }
-  }, [isFocused, gameState, userInput.length, text, moveToNextParagraph]);
+  }, [isFocused, gameState, userInput.length, text, moveToNextParagraph, paragraphAttempts, paragraphCorrect, paragraphIndex, paragraphs.length, difficulty]);
 
   const handleKeyUp = useCallback((e: KeyboardEvent) => {
     setActiveKey(null);
@@ -185,27 +297,37 @@ const App: React.FC = () => {
   }, [handleKeyDown, handleKeyUp]);
 
   const mistakeEntries = Object.entries(lastParagraphMistakes).sort((a, b) => b[1] - a[1]);
+  const currentRecord = sessionRecords[difficulty];
 
   return (
     <div className="min-h-screen bg-slate-950 py-8 px-4 font-sans selection:bg-primary-500/30">
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6">
+      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6">
         <aside className="bg-slate-900 border border-slate-800 rounded-2xl p-4 h-fit lg:sticky lg:top-4">
           <h2 className="text-white font-bold text-lg mb-2">Paragraph Navigator</h2>
           <p className="text-slate-400 text-sm mb-2">Difficulty: <span className="text-primary-400 font-semibold">{difficultyLabels[difficulty]}</span></p>
-          <p className="text-slate-400 text-sm mb-2">Current paragraph: <span className="text-primary-400 font-semibold">#{paragraphIndex + 1}</span></p>
-          <p className="text-slate-400 text-sm mb-4">Completed: <span className="text-emerald-400 font-semibold">{completedParagraphs}</span></p>
-          <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
-            {paragraphs.map((_, idx) => (
-              <div
-                key={idx}
-                className={`px-3 py-2 rounded-lg text-sm border ${idx === paragraphIndex
-                  ? 'bg-primary-600/20 border-primary-500 text-white'
-                  : 'bg-slate-800 border-slate-700 text-slate-400'
-                  }`}
-              >
-                Paragraph {idx + 1}
-              </div>
-            ))}
+          <p className="text-slate-400 text-sm mb-2">Current paragraph: <span className="text-primary-400 font-semibold">#{(paragraphIndex % paragraphs.length) + 1}</span></p>
+          <p className="text-slate-400 text-sm mb-4">Completed (saved): <span className="text-emerald-400 font-semibold">{currentRecord.completedParagraphs}</span></p>
+          <div className="space-y-2 max-h-[52vh] overflow-y-auto pr-1">
+            {paragraphs.map((_, idx) => {
+              const acc = currentRecord.paragraphAccuracies[idx];
+              const active = idx === (paragraphIndex % paragraphs.length);
+              return (
+                <div
+                  key={idx}
+                  className={`px-3 py-2 rounded-lg text-sm border ${active
+                    ? 'bg-primary-600/20 border-primary-500 text-white'
+                    : 'bg-slate-800 border-slate-700 text-slate-300'
+                    }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span>Paragraph {idx + 1}</span>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded ${acc !== undefined ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-700 text-slate-400'}`}>
+                      {acc !== undefined ? `${Math.round(acc)}%` : '--'}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </aside>
 
@@ -222,11 +344,11 @@ const App: React.FC = () => {
             </div>
 
             <button
-              onClick={resetGame}
+              onClick={resetCurrentDifficultySession}
               className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors font-medium text-sm border border-slate-700"
             >
               <RefreshCw size={16} />
-              Reset Session
+              Reset {difficultyLabels[difficulty]} Session
             </button>
           </header>
 
@@ -279,7 +401,7 @@ const App: React.FC = () => {
 
           <div className="w-full max-w-5xl mb-4">
             <p className="text-center text-slate-500 text-sm">
-              Allowed set: <span className="text-slate-300">A-Z, a-z</span> and <span className="px-1.5 py-0.5 bg-slate-800 rounded text-slate-300 font-mono text-xs mx-1">, . : ; ' " ?</span>
+              Allowed set: <span className="text-slate-300">A-Z, a-z</span> and <span className="px-1.5 py-0.5 bg-slate-800 rounded text-slate-300 font-mono text-xs mx-1">, . : ; ' " ?</span> + press <span className="px-1.5 py-0.5 bg-slate-800 rounded text-slate-300 font-mono text-xs">Enter</span> at paragraph end.
             </p>
           </div>
 
