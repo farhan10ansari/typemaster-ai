@@ -277,7 +277,15 @@ const App: React.FC = () => {
 
     if (isCorrect) {
       setIsError(false);
-      setUserInput(prev => prev + (charTyped === '\n' ? '' : charTyped));
+
+      // Explicitly handle paragraph-end Enter so next paragraph always opens reliably.
+      if (charTyped === '\n' && correctChar === '\n') {
+        const paragraphAccuracy = nextAttempts > 0 ? (nextCorrect / nextAttempts) * 100 : 100;
+        moveToNextParagraph(paragraphAccuracy, paragraphIndex % paragraphs.length);
+        return;
+      }
+
+      setUserInput(prev => prev + charTyped);
 
       if (nextCharIndex + 1 === text.length) {
         const paragraphAccuracy = nextAttempts > 0 ? (nextCorrect / nextAttempts) * 100 : 100;
