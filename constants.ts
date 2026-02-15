@@ -1,6 +1,31 @@
 import { KeyboardRow } from './types';
 
-export const INITIAL_TEXT = "The quick brown fox jumps over the lazy dog; ensuring that: typing, precision, and speed are tested correctly. 'Practice makes perfect', they say.";
+export const PRACTICE_PARAGRAPHS: string[] = [
+  "Ask Sam: can Alice sing a classic aria, or is silence safer?",
+  "Quiet minds create clear ideas; calm focus grows strong skill.",
+  "Grace and pace are core goals, so compose small, clean phrases.",
+  "A classic session asks: can speed stay safe, smooth, and smart?",
+  "Sincere practice builds secure muscle memory, case after case.",
+  "Choose a clear aim, raise accuracy, and keep errors quite small.",
+  "Simple lines can train fast fingers; slow starts still create gains.",
+  "Please trace each phrase with care, then ask: is quality rising?",
+  "A quiet class shares this motto: precise strokes shape strong speed.",
+  "Clean typing means calm rhythm, clear spacing, and smart control.",
+  "Can Sara see missed signs, or does she skip subtle symbols?",
+  "A major reason for skill: constant focus, patient practice, solid form.",
+  "Try this phrase, then say: \"is every comma, period, and quote correct?\"",
+  "Slow, steady sessions create sure progress; rushed moves cause errors.",
+  "Ask quick questions, seek clear answers, and keep your pace balanced.",
+  "A sharp typist scans each line, checks each mark, and stays composed.",
+  "Can careful choices reduce random slips, or is chaos still common?",
+  "Use small sets of symbols, then raise complexity as confidence grows.",
+  "A calm state supports smooth motion; a tense state creates shaky strokes.",
+  "Write each sentence with intent: accuracy first, speed after.",
+  "Quiet rooms, clear goals, and steady hands make strong sessions.",
+  "Can a simple routine sustain progress, or does boredom break flow?",
+  "Precise practice, patient timing, and steady effort shape mastery.",
+  "Keep typing paragraph after paragraph; consistent reps build lasting skill."
+];
 
 export const KEYBOARD_LAYOUT: KeyboardRow[] = [
   {
