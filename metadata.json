@@ -1,0 +1,5 @@
+{
+  "name": "TypeMaster AI",
+  "description": "An intelligent typing tutor that generates dynamic lessons focusing on specific characters and symbols using Gemini AI.",
+  "requestFramePermissions": []
+}
