@@ -224,39 +224,6 @@ const App: React.FC = () => {
 
     if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab'].includes(e.key)) return;
 
-    // Robust paragraph-end Enter handling: if user is exactly at the final newline marker,
-    // Enter should always advance to next paragraph.
-    if (e.key === 'Enter' && userInput.length === text.length - 1) {
-      const nextAttempts = paragraphAttempts + 1;
-      const nextCorrect = paragraphCorrect + 1;
-      const paragraphAccuracy = nextAttempts > 0 ? (nextCorrect / nextAttempts) * 100 : 100;
-
-      setParagraphAttempts(nextAttempts);
-      setParagraphCorrect(nextCorrect);
-
-      setStats(prev => ({
-        ...prev,
-        totalChars: prev.totalChars + 1,
-        correctChars: prev.correctChars + 1,
-      }));
-
-      setSessionRecords(prev => {
-        const current = prev[difficulty];
-        return {
-          ...prev,
-          [difficulty]: {
-            ...current,
-            totalTyped: current.totalTyped + 1,
-            totalCorrect: current.totalCorrect + 1,
-            updatedAt: Date.now(),
-          },
-        };
-      });
-
-      moveToNextParagraph(paragraphAccuracy, paragraphIndex % paragraphs.length);
-      return;
-    }
-
     if (e.key === 'Backspace') {
       setUserInput(prev => prev.slice(0, -1));
       setIsError(false);
@@ -311,19 +278,14 @@ const App: React.FC = () => {
     if (isCorrect) {
       setIsError(false);
 
-      // Explicitly handle paragraph-end Enter so next paragraph always opens reliably.
-      if (charTyped === '\n' && correctChar === '\n') {
+      const appendedInput = userInput + charTyped;
+      if (appendedInput.length >= text.length) {
         const paragraphAccuracy = nextAttempts > 0 ? (nextCorrect / nextAttempts) * 100 : 100;
         moveToNextParagraph(paragraphAccuracy, paragraphIndex % paragraphs.length);
         return;
       }
 
-      setUserInput(prev => prev + charTyped);
-
-      if (nextCharIndex + 1 === text.length) {
-        const paragraphAccuracy = nextAttempts > 0 ? (nextCorrect / nextAttempts) * 100 : 100;
-        moveToNextParagraph(paragraphAccuracy, paragraphIndex % paragraphs.length);
-      }
+      setUserInput(appendedInput);
     } else {
       setIsError(true);
       setParagraphMistakes(prev => ({ ...prev, [correctChar]: (prev[correctChar] ?? 0) + 1 }));
@@ -333,7 +295,7 @@ const App: React.FC = () => {
         return updated;
       });
     }
-  }, [isFocused, gameState, userInput.length, text, moveToNextParagraph, paragraphAttempts, paragraphCorrect, paragraphIndex, paragraphs.length, difficulty]);
+  }, [isFocused, gameState, userInput, text, moveToNextParagraph, paragraphAttempts, paragraphCorrect, paragraphIndex, paragraphs.length, difficulty]);
 
   const handleKeyUp = useCallback((e: KeyboardEvent) => {
     setActiveKey(null);
