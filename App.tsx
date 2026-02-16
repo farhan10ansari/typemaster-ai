@@ -217,7 +217,7 @@ const App: React.FC = () => {
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (!isFocused || gameState === GameState.LOADING) return;
 
-    if (e.code === 'Space') e.preventDefault();
+    if (e.code === 'Space' || e.key === 'Enter') e.preventDefault();
 
     setActiveKey(e.code);
     if (e.key === 'Shift') setIsShiftPressed(true);
