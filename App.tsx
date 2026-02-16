@@ -224,6 +224,39 @@ const App: React.FC = () => {
 
     if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab'].includes(e.key)) return;
 
+    // Robust paragraph-end Enter handling: if user is exactly at the final newline marker,
+    // Enter should always advance to next paragraph.
+    if (e.key === 'Enter' && userInput.length === text.length - 1) {
+      const nextAttempts = paragraphAttempts + 1;
+      const nextCorrect = paragraphCorrect + 1;
+      const paragraphAccuracy = nextAttempts > 0 ? (nextCorrect / nextAttempts) * 100 : 100;
+
+      setParagraphAttempts(nextAttempts);
+      setParagraphCorrect(nextCorrect);
+
+      setStats(prev => ({
+        ...prev,
+        totalChars: prev.totalChars + 1,
+        correctChars: prev.correctChars + 1,
+      }));
+
+      setSessionRecords(prev => {
+        const current = prev[difficulty];
+        return {
+          ...prev,
+          [difficulty]: {
+            ...current,
+            totalTyped: current.totalTyped + 1,
+            totalCorrect: current.totalCorrect + 1,
+            updatedAt: Date.now(),
+          },
+        };
+      });
+
+      moveToNextParagraph(paragraphAccuracy, paragraphIndex % paragraphs.length);
+      return;
+    }
+
     if (e.key === 'Backspace') {
       setUserInput(prev => prev.slice(0, -1));
       setIsError(false);
